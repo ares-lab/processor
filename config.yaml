@@ -1,4 +1,0 @@
-data_dir: "/home/ecl/projects/M21.02_ArchiveProcessor/ARES0002"
-flowcell: "FLO-MIN106"
-kit: "SQK-RBK001"
-samples: "samples.csv"
