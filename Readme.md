@@ -1,6 +1,6 @@
-# <img src="ARES_Small.png" width=150> MinION Run Processor  
+## MinION Run Processor  <img src="ARES_Small.png" width=150 align="right"> 
 
-This workflow aims to automate basecalling, demultiplexing, adaptor trimming, and assembly of our MinION runs. There's nothing specific to the ARES group here, so it may be applicable for anybody doing bacterial genome assemblies from a MinION.
+This workflow aims to automate basecalling, demultiplexing, adaptor trimming, and assembly from MinION runs. This workflow may be applicable for anybody doing bacterial genome assemblies from a MinION.
 
 ## Installation
 
@@ -27,4 +27,4 @@ The sample sheet contains two tab-delimited columns, `sample_id` and `barcode`. 
 
 ## Running
 
-Since this is a Snakemake workflow, execution is just by calling `snakemake` from the `processor` directory.
+Since this is a Snakemake workflow, it can be executed by calling `snakemake` from the `processor` directory.
