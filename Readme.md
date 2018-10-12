@@ -1,6 +1,4 @@
-# ARES MinION Run Processor
-
-![ARES Lab](ARES_Small.png)
+# <img src="ARES_Small.png" width=150> MinION Run Processor  
 
 This workflow aims to automate basecalling, demultiplexing, adaptor trimming, and assembly of our MinION runs. There's nothing specific to the ARES group here, so it may be applicable for anybody doing bacterial genome assemblies from a MinION.
 
