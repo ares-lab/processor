@@ -13,10 +13,11 @@ Requirements:
 
 Configuration is done through the `config.yaml` file. 
 The relevant keys are:
-- `data_dir`: this is where Processor expects to find the `fast5` folder, and where it will write output files
+- `fast5_dir`: the folder containing the fast5 files, which will be explored recursively
+- `output_dir`: the folder to write all the resulting output
 - `flowcell`: the flowcell model number
 - `kit`: the kit version number
-- `samples`: the path to the sample sheet, described below
+- `samplesheet_fp`: the path to the sample sheet, described below
 
 The sample sheet contains two tab-delimited columns, `sample_id` and `barcode`. The `sample_id` column will be used to generate the names of the resulting fastq.gz files, so it should not contain spaces or invalid characters for a file like `/`.  The barcode column gives the numeric index of what barcode was used during library prep.
 
