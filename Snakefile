@@ -1,41 +1,31 @@
-from itertools import chain
 
-data_dir = "ARES0002"
+import processor
 
-mapping = {
-    'S-180222-00127-1': ['7','9']
-}
+configfile: "config.yaml"
 
-def barcodes(sample=None):
-    if sample == None:
-        return list(chain.from_iterable(
-            [[n.zfill(2) for n in b] for b in mapping.values()]))
-    return [n.zfill(2) for n in mapping.get(sample)]
+samples = processor.parse_samplesheet(config['samples'])
 
-print(barcodes())
-
-def barcodes_from_wc(wildcards):
-    return barcodes(wildcards['sample'])
+print(samples)
 
 rule all:
-    input: "ARES0002/fastq/S-180222-00127-1.fastq.gz"
+    input: expand(config['data_dir']+'/fastq/{sample}.fastq.gz', sample=samples.sample_id)
 
 rule albacore:
-    input: data_dir+"/fast5"
+    input: config['data_dir']+"/fast5"
     output:
         expand(
-            data_dir+"/albacore/workspace/barcode{bc}/reads.fastq",
-            bc = barcodes())
+            config['data_dir']+"/albacore/workspace/barcode{bc}/reads.fastq",
+            bc = processor.padded_barcodes(samples))
     params:
-        save_path = data_dir+"/albacore" 
-    threads: 32
+        save_path = config['data_dir']+"/albacore" 
+    threads: 8
     shell:
         """
         read_fast5_basecaller.py \
         --input {input} \
         --save_path {params.save_path} \
-        --flowcell FLO-MIN106 \
-        --kit SQK-RBK001 \
+        --flowcell {config[flowcell]} \
+        --kit {config[kit]} \
         --output_format fastq \
         --recursive \
         --disable_filtering \
@@ -50,9 +40,9 @@ rule albacore:
 rule merge:
     input:
         lambda wc: expand(
-            data_dir+"/albacore/workspace/barcode{bc}/reads.fastq",
-            bc = barcodes_from_wc(wc))
+            config['data_dir']+"/albacore/workspace/barcode{bc}/reads.fastq",
+            bc = processor.padded_barcodes(samples.loc[samples.sample_id == wc['sample']]))
     output:
-        data_dir+"/fastq/{sample}.fastq.gz"
+        config['data_dir']+"/fastq/{sample}.fastq.gz"
     shell:
         """cat {input} | gzip > {output}"""
