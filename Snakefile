@@ -13,26 +13,45 @@ samples = processor.parse_samplesheet(config['samplesheet_fp'])
 rule all:
     input:
         expand(
-            config['output_dir']+'/trimmed/{sample}.fastq.gz',
-            sample=samples.sample_id)
+            config['output_dir']+'/trimmed/barcode{bc}.fastq.gz.index.readdb',
+            bc=processor.padded_barcodes(samples))
 
 # Basecalling and demultiplexing
 # -----------------------------------------------------------------------------
-rule basecall_albacore:
+rule demux_deepbinner:
     input:
         config['fast5_dir']
     output:
-        expand(
-            config['output_dir']+"/albacore/workspace/barcode{bc}/reads.fastq",
-            bc = processor.padded_barcodes(samples))
+        flag = touch(config['output_dir']+ "/deepbinner.completed")
+    threads: 8
     params:
-        save_path = config['output_dir']+"/albacore" 
+        out_dir = config['output_dir']+'/deepbinner',
+        model = {
+            "SQK-RBK004": '--rapid',
+            "EXP-NBD103": '--native'}[config['kit']]
+    shell:
+        """
+        deepbinner realtime \
+        {params.model} \
+        --in_dir {input} \
+        --out_dir {params.out_dir} \
+        --omp_num_threads {threads} \
+        --intra_op_parallelism_threads {threads} \
+        --no_batch
+        """
+
+rule basecall_albacore:
+    input:
+        db_flag=ancient(config['output_dir'] + "/deepbinner.completed"),
+        bc_dir=ancient(config['output_dir']+'/deepbinner/barcode{bc}')
+    output:
+        directory(config['output_dir']+'/albacore/albacore{bc}/workspace/barcode{bc}')
     threads: 8
     shell:
         """
         read_fast5_basecaller.py \
-        --input {input} \
-        --save_path {params.save_path} \
+        --input {input.bc_dir} \
+        --save_path {output} \
         --flowcell {config[flowcell]} \
         --kit {config[kit]} \
         --output_format fastq \
@@ -40,28 +59,36 @@ rule basecall_albacore:
         --disable_filtering \
         --reads_per_fastq_batch 0 \
         --files_per_batch_folder 0 \
-        --worker_threads {threads} && \
-        for file in $(find {params.save_path} -name '*.fastq'); do
-          mv $file $(dirname $file)/reads.fastq
-        done
+        --worker_threads {threads}
         """
 
-rule make_sample_fastqs:
+rule keep_consensus:
     input:
-        lambda wc: expand(
-            config['output_dir']+"/albacore/workspace/barcode{bc}/reads.fastq",
-            bc = processor.padded_barcodes(samples.loc[samples.sample_id == wc['sample']]))
+        config['output_dir']+'/albacore/albacore{bc}/workspace/barcode{bc}'
     output:
-        config['output_dir']+"/fastq/{sample}.fastq.gz"
+        config['output_dir']+'/consensus/barcode{bc}.fastq.gz'
     shell:
-        """cat {input} | gzip > {output}"""
+        "cat {input}/*.fastq | gzip > {output}"
 
 rule trim_porechop:
     input:
-        config['output_dir']+"/fastq/{sample}.fastq.gz"
+        config['output_dir']+"/consensus/{barcode}.fastq.gz"
     output:
-        config['output_dir']+"/trimmed/{sample}.fastq.gz"
+        config['output_dir']+"/trimmed/{barcode}.fastq.gz"
     conda:
         "envs/porechop.yaml"
     shell:
         "porechop -i {input} -o {output} --discard_middle"
+
+rule index_nanopolish:
+    input:
+        fast5s = config['output_dir']+'/deepbinner/barcode{bc}',
+        summary = config['output_dir']+'/albacore/albacore{bc}/sequencing_summary.txt',
+        fastq = config['output_dir']+'/trimmed/barcode{bc}.fastq.gz'
+    output:
+        config['output_dir']+'/trimmed/barcode{bc}.fastq.gz.index.readdb'
+    conda:
+        "envs/nanopolish.yaml"
+    shell:
+        "nanopolish index -d {input.fast5s} -s {input.summary} {input.fastq}"
+        

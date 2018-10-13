@@ -7,11 +7,14 @@ This workflow aims to automate basecalling, demultiplexing, adaptor trimming, an
 Requirements:
 
 - snakemake 5.2.0 or greater
+- Deepbinner (patched version, instructions below)
 - albacore 2.3.3 or greater (link: https://mirror.oxfordnanoportal.com/software/analysis/ont_albacore-2.3.3-cp36-cp36m-manylinux1_x86_64.whl)
 
 1. Create a conda environment with `conda create -n processor snakemake -c bioconda`
 2. Change into conda environment: `source activate processor`
-3. Download albacore and install into the `processor` environment
+3. Download albacore and install into the `processor` environment: `pip install https://mirror.oxfordnanoportal.com/software/analysis/ont_albacore-2.3.3-cp36-cp36m-manylinux1_x86_64.whl`
+4. Install the patched version of Deepbinner: `pip install git+https://github.com/eclarke/Deepbinner`
+5. Install TensorFlow: `pip install tensorflow`
 
 ## Configuration
 
