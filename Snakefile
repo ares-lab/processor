@@ -1,57 +1,63 @@
-#
-# ARES Lab MinION Run Processor
-# https://github.com/ares-lab/processor
-#
+#=================================================#
+# ARES Processor: MinION Run Processing Pipeline  #
+# https://github.com/ares-lab/processor           #
+#=================================================#
+
 from snakemake.utils import min_version
 import processor
 
 # Setup
-# -----------------------------------------------------------------------------
+# ------------------------------------------------
 min_version("5.2")
 samples = processor.parse_samplesheet(config['samplesheet_fp'])
 
 rule all:
     input:
         expand(
-            config['output_dir']+'/trimmed/barcode{bc}.fastq.gz.index.readdb',
+            config['output_dir']+'/demultiplexed/fastq/barcode{bc}/trimmed.fastq.gz',
             bc=processor.padded_barcodes(samples))
 
 # Basecalling and demultiplexing
-# -----------------------------------------------------------------------------
-rule demux_deepbinner:
-    input:
-        config['fast5_dir']
+# ------------------------------------------------
+rule demux_fast5:
     output:
-        flag = touch(config['output_dir']+ "/deepbinner.completed")
+        out_dir = directory(expand(
+            config['output_dir']+'/demultiplexed/fast5/barcode{bc}',
+            bc=processor.padded_barcodes(samples))),
+        flag = touch(config['output_dir']+'/demultiplexed/fast5/.deepbinner.completed')
     threads: 8
     params:
-        out_dir = config['output_dir']+'/deepbinner',
+        in_dir = config['fast5_dir'],
+        out_dir = config['output_dir']+'/demultiplexed/fast5',
         model = {
             "SQK-RBK004": '--rapid',
-            "EXP-NBD103": '--native'}[config['kit']]
+            "EXP-NBD103": '--native'}[config['kit']]    
     shell:
         """
         deepbinner realtime \
         {params.model} \
-        --in_dir {input} \
+        --in_dir {params.in_dir} \
         --out_dir {params.out_dir} \
         --omp_num_threads {threads} \
         --intra_op_parallelism_threads {threads} \
         --no_batch
         """
 
-rule basecall_albacore:
+rule basecall_fast5:
     input:
-        db_flag=ancient(config['output_dir'] + "/deepbinner.completed"),
-        bc_dir=ancient(config['output_dir']+'/deepbinner/barcode{bc}')
+        fast5=ancient(config['output_dir']+'/demultiplexed/fast5/barcode{bc}'),
+        flag=rules.demux_fast5.output.flag
     output:
-        directory(config['output_dir']+'/albacore/albacore{bc}/workspace/barcode{bc}')
+        out_dir = directory(config['output_dir']+'/demultiplexed/fastq/barcode{bc}/albacore/workspace/barcode{bc}'),
+        summary = config['output_dir']+'/demultiplexed/fastq/barcode{bc}/albacore/sequencing_summary.txt'
     threads: 8
+    params:
+        out_dir = config['output_dir']+'/demultiplexed/fastq/barcode{bc}/albacore'
     shell:
         """
         read_fast5_basecaller.py \
-        --input {input.bc_dir} \
-        --save_path {output} \
+        --input {input.fast5} \
+        --save_path {params.out_dir} \
         --flowcell {config[flowcell]} \
         --kit {config[kit]} \
         --output_format fastq \
@@ -64,17 +70,17 @@ rule basecall_albacore:
 
 rule keep_consensus:
     input:
-        config['output_dir']+'/albacore/albacore{bc}/workspace/barcode{bc}'
+        ancient(rules.basecall_fast5.output.out_dir)
     output:
-        config['output_dir']+'/consensus/barcode{bc}.fastq.gz'
+        temp(config['output_dir']+'/demultiplexed/fastq/barcode{bc}/untrimmed.fastq.gz')
     shell:
         "cat {input}/*.fastq | gzip > {output}"
 
-rule trim_porechop:
+rule trim_adapters:
     input:
-        config['output_dir']+"/consensus/{barcode}.fastq.gz"
+        ancient(rules.keep_consensus.output)
     output:
-        config['output_dir']+"/trimmed/{barcode}.fastq.gz"
+        config['output_dir']+"/demultiplexed/fastq/barcode{bc}/trimmed.fastq.gz"
     conda:
         "envs/porechop.yaml"
     shell:
@@ -82,13 +88,13 @@ rule trim_porechop:
 
 rule index_nanopolish:
     input:
-        fast5s = config['output_dir']+'/deepbinner/barcode{bc}',
-        summary = config['output_dir']+'/albacore/albacore{bc}/sequencing_summary.txt',
-        fastq = config['output_dir']+'/trimmed/barcode{bc}.fastq.gz'
+        fast5 = ancient(rules.basecall_fast5.input.fast5),
+        fastq = ancient(rules.trim_adapters.output),
+        summary = ancient(rules.basecall_fast5.output.summary)
     output:
-        config['output_dir']+'/trimmed/barcode{bc}.fastq.gz.index.readdb'
+        config['output_dir']+'/demultiplexed/fastq/barcode{bc}/trimmed.fastq.gz.index.readdb'
     conda:
         "envs/nanopolish.yaml"
     shell:
-        "nanopolish index -d {input.fast5s} -s {input.summary} {input.fastq}"
+        "nanopolish index -d {input.fast5} -s {input.summary} {input.fastq}"
         
